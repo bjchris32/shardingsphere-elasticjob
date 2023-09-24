@@ -33,8 +33,18 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.Mockito.eq;
+
+import java.util.Map;
+import java.util.LinkedHashMap;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 public class JobSettingsAPIImplTest {
     
@@ -90,7 +100,7 @@ public class JobSettingsAPIImplTest {
             assertThat(jobSettings.getScriptCommandLine(), is("test.sh"));
         }
     }
-    
+
     @Test
     public void assertUpdateJobSettings() {
         when(regCenter.get("/test_job/config")).thenReturn(LifecycleJsonConstants.getDataflowJobJson());
@@ -108,11 +118,30 @@ public class JobSettingsAPIImplTest {
         jobSettings.getJobProperties().put(JobPropertiesEnum.JOB_EXCEPTION_HANDLER.getKey(), DefaultJobExceptionHandler.class.getCanonicalName());
         jobSettings.setReconcileIntervalMinutes(70);
         jobSettingsAPI.updateJobSettings(jobSettings);
-        verify(regCenter).update("/test_job/config", "{\"jobName\":\"test_job\",\"jobClass\":\"io.elasticjob.lite.fixture.TestDataflowJob\","
-                + "\"cron\":\"0/1 * * * * ?\",\"shardingTotalCount\":10,\"monitorExecution\":true,\"streamingProcess\":true,"
-                + "\"maxTimeDiffSeconds\":-1,\"monitorPort\":-1,\"failover\":false,\"misfire\":true,"
-                + "\"jobProperties\":{\"executor_service_handler\":\"" + DefaultExecutorServiceHandler.class.getCanonicalName() + "\","
-                + "\"job_exception_handler\":\"" + DefaultJobExceptionHandler.class.getCanonicalName() + "\"},\"reconcileIntervalMinutes\":70}");
+
+        Map<String, Object> expectedMap = new LinkedHashMap<>();
+        expectedMap.put("jobName", "test_job");
+        expectedMap.put("jobClass", "io.elasticjob.lite.fixture.TestDataflowJob");
+        expectedMap.put("cron", "0/1 * * * * ?");
+        expectedMap.put("shardingTotalCount", 10);
+        expectedMap.put("monitorExecution", true);
+        expectedMap.put("streamingProcess", true);
+        expectedMap.put("maxTimeDiffSeconds", -1);
+        expectedMap.put("monitorPort", -1);
+        expectedMap.put("failover", false);
+        expectedMap.put("misfire", true);
+        expectedMap.put("jobProperties", jobSettings.getJobProperties());
+        expectedMap.put("reconcileIntervalMinutes", 70);
+
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        String expectedJson = gson.toJson(expectedMap);
+
+        ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(regCenter).update(eq("/test_job/config"), argumentCaptor.capture());
+        JsonParser parser = new JsonParser();
+        JsonElement actual = parser.parse(argumentCaptor.getValue());
+        JsonElement expected = parser.parse(expectedJson);
+        assertEquals(expected, actual);
     }
     
     @Test(expected = IllegalArgumentException.class)
